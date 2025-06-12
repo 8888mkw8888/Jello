@@ -1,38 +1,22 @@
-# main.py
-# CircuitPython script for USB Mouse Jiggler
-#
-# This script turns a CircuitPython-compatible board into a USB mouse jiggler.
-# It emulates a generic USB mouse and moves the cursor slightly
-# every few seconds to prevent the system from going idle.
-#
-# Installation:
-# 1. Ensure your CircuitPython board has the `adafruit_hid` library installed
-#    (e.g., in the 'lib' folder or built into the firmware).
-# 2. If your board requires explicit USB HID enablement, configure `boot.py` accordingly
-#    (e.g., with `usb_hid.enable((adafruit_hid.Device.MOUSE,))`).
-# 3. Copy this code and save it as `main.py` or `code.py` on your CircuitPython board.
-# 4. The script will run automatically when the board boots.
-
 import time
+import random # Import the random module for generating random numbers
+
 try:
     from adafruit_hid.mouse import Mouse
-    import usb_hid # Used by CircuitPython for enabling HID devices, often in boot.py
+    import usb_hid # Needed to access usb_hid.devices for the Mouse constructor
+    from adafruit_hid import Device # This is needed for boot.py, but good to have if debugging
 except ImportError:
     print("Error: The 'adafruit_hid.mouse' or 'usb_hid' module is not available.")
     print("Please ensure your CircuitPython board has the adafruit_hid library installed,")
     print("and that basic usb_hid functionality is present in your CircuitPython build.")
     raise
 
-# On CircuitPython, USB HID devices are typically enabled in boot.py.
-# For example, boot.py might contain:
-# import usb_hid
-# from adafruit_hid import Device # Corrected import for Device
-# usb_hid.enable((Device.MOUSE,))
-# This main.py or code.py assumes that HID mouse is already enabled via boot.py.
-
-# Define the mouse jiggle parameters
-MOVE_DISTANCE_X = 5  # Pixels to move in X direction
-MOVE_DISTANCE_Y = 5  # Pixels to move in Y direction
+# Define the range for random mouse jiggle
+# These values define the minimum and maximum pixels the mouse will move
+# in a single jiggle in both X and Y directions.
+# Using a range like -5 to 5 will allow movement in all directions from a central point.
+MIN_MOVE_DISTANCE = 5
+MAX_MOVE_DISTANCE = 10
 DELAY_SECONDS = 2    # Delay between jiggles
 
 def mouse_jiggle():
@@ -40,33 +24,57 @@ def mouse_jiggle():
     Initializes the USB HID mouse and enters an infinite loop
     to jiggle the mouse cursor.
     """
-    print("Starting CircuitPython USB Mouse Jiggler...")
+    print("Jello is jiggling...")
 
     try:
-        mouse = Mouse()
+        # Pass usb_hid.devices to the Mouse constructor.
+        # This tells the Mouse object which USB HID device to control.
+        mouse = Mouse(usb_hid.devices)
     except Exception as e:
         print(f"Error initializing mouse: {e}")
         print("Ensure USB HID mouse is enabled (e.g., in boot.py) and adafruit_hid library is present.")
         return
 
-    time.sleep(1) # Small delay to ensure the USB device is ready on the host
+    # Small delay to allow the USB device to fully enumerate on the host computer.
+    # This can prevent initial errors where the host isn't yet ready for HID input.
+    time.sleep(1)
 
     while True:
         try:
-            print(f"Jiggling mouse: move ({MOVE_DISTANCE_X}, {MOVE_DISTANCE_Y})")
-            mouse.move(x=MOVE_DISTANCE_X, y=MOVE_DISTANCE_Y, wheel=0)
-            time.sleep(DELAY_SECONDS)
+            # Generate random movement distances for X and Y
+            # random.randint(a, b) returns a random integer N such that a <= N <= b.
+            # We multiply by random.choice([-1, 1]) to randomly choose a positive or negative direction.
+            move_x = random.randint(MIN_MOVE_DISTANCE, MAX_MOVE_DISTANCE) * random.choice([-1, 1])
+            move_y = random.randint(MIN_MOVE_DISTANCE, MAX_MOVE_DISTANCE) * random.choice([-1, 1])
 
-            print(f"Jiggling mouse: move ({-MOVE_DISTANCE_X}, {-MOVE_DISTANCE_Y})")
-            mouse.move(x=-MOVE_DISTANCE_X, y=-MOVE_DISTANCE_Y, wheel=0)
-            time.sleep(DELAY_SECONDS)
+            print(f"Jiggling mouse: move ({move_x}, {move_y})")
+            # Move the mouse by the specified X and Y distances.
+            # wheel=0 indicates no scroll wheel movement.
+            mouse.move(x=move_x, y=move_y, wheel=0)
+            time.sleep(DELAY_SECONDS) # Wait for the specified delay
+
+            # No need to explicitly move back now, as the next jiggle will be random
+            # and could naturally move it back or in another direction.
+            # If you wanted it to return to a central point after each jiggle,
+            # you would uncomment and adjust the following lines, but for pure jiggling,
+            # continuous random movement is more effective.
+            # print(f"Jiggling mouse: move ({-move_x}, {-move_y})")
+            # mouse.move(x=-move_x, y=-move_y, wheel=0)
+            # time.sleep(DELAY_SECONDS)
 
         except Exception as e:
+            # If an error occurs during jiggling (e.g., USB disconnected),
+            # print the error and wait longer before retrying to prevent rapid error cycling.
             print(f"Error during mouse jiggle: {e}")
             time.sleep(5)
 
 if __name__ == "__main__":
+    # This check ensures that mouse_jiggle() is only called if the necessary
+    # HID modules were successfully imported at the beginning of the script.
     if 'Mouse' in globals():
         mouse_jiggle()
     else:
+        # This part of the error message should ideally not be reached if
+        # the initial ImportError block correctly raises an exception.
+        # It's kept as a fallback for clarity.
         print("Mouse jiggler cannot start due to missing 'adafruit_hid.mouse.Mouse' or 'usb_hid' module.")
